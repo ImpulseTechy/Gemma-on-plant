@@ -1,0 +1,14 @@
+[Unit]
+Description=Soil moisture web dashboard (port 8080)
+After=network-online.target
+
+[Service]
+Type=simple
+User=shivansh
+WorkingDirectory=/home/shivansh/soil-monitor
+ExecStart=/usr/bin/python3 /home/shivansh/soil-monitor/dashboard.py --port 8080
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

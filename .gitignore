@@ -1,0 +1,13 @@
+# Live data and per-device calibration (created on the Pi)
+pi/data/
+*.db
+calibration.json
+__pycache__/
+*.pyc
+.DS_Store
+.claude/
+
+# Private video files (kept locally, not on GitHub)
+LONGFORM_SCRIPT.md
+REEL_SCRIPT.md
+whiteboard.html

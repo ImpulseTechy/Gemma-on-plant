@@ -1,0 +1,14 @@
+[Unit]
+Description=Soil moisture collector (ADS1x15 -> SQLite)
+After=multi-user.target
+
+[Service]
+Type=simple
+User=shivansh
+WorkingDirectory=/home/shivansh/soil-monitor
+ExecStart=/usr/bin/python3 /home/shivansh/soil-monitor/collector.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soil Monitor</title>
+<style>
+  :root {
+    --bg: #f4f6f2; --card: #ffffff; --text: #1d2a1f; --muted: #66736a;
+    --line: #e2e7df; --accent: #2f8f5b; --dry: #c9792b; --wet: #2f6fb8;
+    --ok: #2f8f5b; --chart: #2f8f5b; --band-dry: rgba(201,121,43,.10);
+    --band-wet: rgba(47,111,184,.10); --shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121713; --card: #1b221d; --text: #e6ece7; --muted: #95a39a;
+      --line: #2b352e; --accent: #5cc48a; --dry: #e39a52; --wet: #6aa3e6;
+      --ok: #5cc48a; --chart: #5cc48a; --band-dry: rgba(227,154,82,.12);
+      --band-wet: rgba(106,163,230,.12); --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { display: flex; justify-content: space-between; align-items: end;
+           flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  h1 { margin: 0; font-size: 24px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: 300px 1fr; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line);
+          border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
+  .card h2 { margin: 0 0 12px; font-size: 13px; font-weight: 600;
+             text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .gauge { display: flex; flex-direction: column; align-items: center; }
+  .gauge svg { width: 190px; height: 190px; }
+  .gauge .num { font-size: 40px; font-weight: 700; fill: var(--text); }
+  .gauge .unit { font-size: 14px; fill: var(--muted); }
+  .pill { display: inline-block; padding: 3px 12px; border-radius: 999px;
+          font-weight: 700; font-size: 13px; letter-spacing: .04em; color: #fff; }
+  .pill.DRY { background: var(--dry); } .pill.WET { background: var(--wet); }
+  .pill.OK { background: var(--ok); } .pill.NO_DATA { background: var(--muted); }
+  .meta { margin-top: 10px; color: var(--muted); font-size: 13px; text-align: center; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
+  @media (max-width: 480px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat { background: var(--bg); border-radius: 10px; padding: 10px; }
+  .stat b { display: block; font-size: 18px; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .chart-head h2 { margin: 0; }
+  .seg button { border: 1px solid var(--line); background: var(--card); color: var(--muted);
+                padding: 4px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  .seg button:first-child { border-radius: 8px 0 0 8px; }
+  .seg button:last-child { border-radius: 0 8px 8px 0; }
+  .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  canvas { width: 100%; height: 260px; display: block; }
+  .ai { margin-top: 14px; }
+  .ai-text { font-size: 16px; line-height: 1.6; white-space: pre-wrap; margin: 0 0 12px; }
+  .ai-foot { display: flex; justify-content: space-between; align-items: center;
+             flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 13px; }
+  .btn { background: var(--accent); color: #fff; border: 0; border-radius: 10px;
+         padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor;
+          border-right-color: transparent; border-radius: 50%; animation: s 1s linear infinite;
+          vertical-align: -2px; margin-right: 6px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  .empty { color: var(--muted); text-align: center; padding: 90px 0; }
+  .chat { margin-top: 14px; }
+  .msgs { display: flex; flex-direction: column; gap: 10px; max-height: 420px;
+          overflow-y: auto; margin-bottom: 12px; }
+  .msg { max-width: 85%; padding: 9px 13px; border-radius: 14px; white-space: pre-wrap;
+         line-height: 1.5; overflow-wrap: anywhere; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #fff;
+              border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--bg);
+                   border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg.err { color: var(--dry); }
+  .msg .wait { color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .chip { border: 1px solid var(--line); background: var(--bg); color: var(--text);
+          border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .chip:disabled { opacity: .5; cursor: default; }
+  .ask-row { display: flex; gap: 8px; }
+  .ask-row input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg);
+                   color: var(--text); border-radius: 10px; padding: 9px 12px; font: inherit; }
+  .ask-row input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .src { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }
+  .raw { margin-top: 14px; }
+  .raw-head { display: flex; justify-content: space-between; align-items: center;
+              flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .raw-head h2 { margin: 0; }
+  .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent);
+               text-decoration: none; font-size: 13px; padding: 6px 12px; }
+  .table-wrap { max-height: 360px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px;
+          font-variant-numeric: tabular-nums; }
+  th, td { padding: 7px 12px; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { position: sticky; top: 0; background: var(--card); color: var(--muted);
+       font-weight: 600; border-bottom: 1px solid var(--line); }
+  tbody tr:nth-child(even) { background: var(--bg); }
+  td.DRY { color: var(--dry); } td.WET { color: var(--wet); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>🌱 Soil Monitor</h1>
+      <div class="sub">Raspberry Pi 4B · ADS1x15 · Gemma 3 1B, fully offline</div>
+    </div>
+    <div class="sub" id="updated">Loading…</div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Moisture now</h2>
+      <div class="gauge">
+        <svg viewBox="0 0 200 200" aria-label="moisture gauge">
+          <circle cx="100" cy="100" r="82" fill="none" stroke="var(--line)" stroke-width="16"/>
+          <circle id="arc" cx="100" cy="100" r="82" fill="none" stroke="var(--accent)"
+                  stroke-width="16" stroke-linecap="round" transform="rotate(-90 100 100)"
+                  stroke-dasharray="0 999"/>
+          <text x="100" y="108" text-anchor="middle" class="num" id="pct">--</text>
+          <text x="100" y="132" text-anchor="middle" class="unit">% moisture</text>
+        </svg>
+        <span class="pill NO_DATA" id="status">NO DATA</span>
+        <div class="meta" id="reading-meta">&nbsp;</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chart-head">
+        <h2>History</h2>
+        <div class="seg" id="range">
+          <button data-h="6">6 h</button><button data-h="24" class="on">24 h</button><button data-h="168">7 d</button>
+        </div>
+      </div>
+      <canvas id="chart"></canvas>
+      <div class="stats">
+        <div class="stat"><b id="s-min">--</b><span>min</span></div>
+        <div class="stat"><b id="s-max">--</b><span>max</span></div>
+        <div class="stat"><b id="s-avg">--</b><span>average</span></div>
+        <div class="stat"><b id="s-n">--</b><span>readings</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card ai">
+    <h2>🤖 Gemma's advice</h2>
+    <p class="ai-text" id="advice">No AI analysis yet.</p>
+    <div class="ai-foot">
+      <span id="ai-meta"></span>
+      <button class="btn" id="ask">Ask Gemma now</button>
+    </div>
+    <div class="note">The status (DRY / OK / WET) is decided by fixed rules in code. Gemma only explains it, and a 1B model can get details wrong.</div>
+  </div>
+
+  <div class="card chat">
+    <h2>💬 Chat with Gemma</h2>
+    <div class="msgs" id="msgs"></div>
+    <div class="chips" id="chips">
+      <button class="chip">What's the status right now?</button>
+      <button class="chip">Should I water the plant?</button>
+      <button class="chip">How has the moisture changed today?</button>
+      <button class="chip">When will the soil be dry?</button>
+    </div>
+    <form class="ask-row" id="ask-form">
+      <input id="q" maxlength="500" autocomplete="off" placeholder="Ask about your plant…">
+      <button class="btn" id="send">Send</button>
+    </form>
+    <div class="note">Every question gets the latest sensor data. Simple status and "should I water?" questions are answered instantly from the data (⚡). Other questions go to Gemma (~10–15 s, words appear as it writes).</div>
+  </div>
+
+  <div class="card raw">
+    <div class="raw-head">
+      <h2>📋 Raw readings <span id="raw-range" style="text-transform:none;letter-spacing:0"></span></h2>
+      <a class="btn ghost" id="csv" href="/api/readings.csv?hours=24" download>⬇ Download CSV</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>ADC value</th><th>Volts</th><th>Moisture</th><th>Status</th></tr></thead>
+        <tbody id="raw-body"><tr><td colspan="5">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="note">Newest first. ADC value is the converter's raw number (16-bit scale, 32767 = 4.096 V). The range follows the History buttons above.</div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let hours = 24, readings = [], thresholds = { dry_below: 30, wet_above: 80 }, polling = null;
+
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const ago = ts => {
+  const s = Math.max(0, Date.now() / 1000 - ts);
+  if (s < 90) return "just now";
+  if (s < 3600) return Math.round(s / 60) + " min ago";
+  if (s < 86400) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " d ago";
+};
+
+async function loadLatest() {
+  const d = await (await fetch("/api/latest")).json();
+  thresholds = d.thresholds;
+  const r = d.reading;
+  if (r && r.percent !== null) {
+    $("pct").textContent = r.percent.toFixed(0);
+    const c = 2 * Math.PI * 82, f = Math.max(0, Math.min(100, r.percent)) / 100;
+    $("arc").setAttribute("stroke-dasharray", `${c * f} ${c}`);
+    $("arc").setAttribute("stroke", css(r.status === "DRY" ? "--dry" : r.status === "WET" ? "--wet" : "--ok"));
+    $("status").className = "pill " + r.status;
+    $("status").textContent = r.status;
+    $("reading-meta").textContent = `${r.volts.toFixed(3)} V · ${ago(r.ts)}`;
+  }
+  const a = d.analysis;
+  if (a) {
+    $("advice").textContent = a.advice || "(Gemma was unavailable; stats were saved without advice.)";
+    $("ai-meta").textContent = `${a.time} · status ${a.status}` + (a.ai_secs ? ` · ${Math.round(a.ai_secs)} s on the Pi` : "");
+  }
+  setAsking(d.analysis_running);
+  $("updated").textContent = "Updated " + new Date().toLocaleTimeString();
+  return d;
+}
+
+async function loadReadings() {
+  const all = await (await fetch("/api/readings?hours=" + hours)).json();
+  renderRaw(all);
+  readings = all.filter(r => r.percent !== null);
+  const v = readings.map(r => r.percent);
+  const fmt = x => x.toFixed(1) + " %";
+  $("s-min").textContent = v.length ? fmt(Math.min(...v)) : "--";
+  $("s-max").textContent = v.length ? fmt(Math.max(...v)) : "--";
+  $("s-avg").textContent = v.length ? fmt(v.reduce((a, b) => a + b, 0) / v.length) : "--";
+  $("s-n").textContent = v.length;
+  draw();
+}
+
+function statusOf(p) {
+  if (p === null) return "NO_DATA";
+  return p < thresholds.dry_below ? "DRY" : p > thresholds.wet_above ? "WET" : "OK";
+}
+
+function renderRaw(rows) {
+  const label = hours > 48 ? (hours / 24) + " days" : hours + " h";
+  $("raw-range").textContent = `· last ${label} · ${rows.length} rows`;
+  $("csv").href = "/api/readings.csv?hours=" + hours;
+  const body = $("raw-body");
+  body.textContent = "";
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="5">No readings in this range yet</td></tr>';
+    return;
+  }
+  for (const r of rows.slice().reverse().slice(0, 500)) {
+    const tr = document.createElement("tr"), st = statusOf(r.percent);
+    const cells = [r.time, r.adc_raw, r.volts.toFixed(4),
+                   r.percent === null ? "n/a" : r.percent.toFixed(1) + " %", st];
+    cells.forEach((v, i) => {
+      const td = document.createElement("td");
+      td.textContent = v;
+      if (i >= 3) td.className = st;
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  }
+}
+
+function draw() {
+  const cv = $("chart"), dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
+  const L = 34, R = 8, T = 8, B = 22, w = W - L - R, h = H - T - B;
+  const y = p => T + h * (1 - p / 100);
+  const now = Date.now() / 1000, t0 = now - hours * 3600;
+  const x = t => L + w * (t - t0) / (now - t0);
+
+  // threshold bands
+  g.fillStyle = css("--band-dry"); g.fillRect(L, y(thresholds.dry_below), w, y(0) - y(thresholds.dry_below));
+  g.fillStyle = css("--band-wet"); g.fillRect(L, y(100), w, y(thresholds.wet_above) - y(100));
+
+  // grid + labels
+  g.strokeStyle = css("--line"); g.fillStyle = css("--muted"); g.lineWidth = 1;
+  g.font = "11px system-ui, sans-serif"; g.textAlign = "right"; g.textBaseline = "middle";
+  for (const p of [0, 25, 50, 75, 100]) {
+    g.beginPath(); g.moveTo(L, y(p)); g.lineTo(L + w, y(p)); g.stroke();
+    g.fillText(p + "%", L - 6, y(p));
+  }
+  g.textAlign = "center"; g.textBaseline = "top";
+  for (let i = 0; i <= 4; i++) {
+    const t = t0 + (now - t0) * i / 4, d = new Date(t * 1000);
+    const label = hours > 48 ? d.toLocaleDateString([], { weekday: "short" })
+                             : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    g.fillText(label, Math.min(Math.max(x(t), L + 18), L + w - 18), T + h + 6);
+  }
+
+  if (!readings.length) {
+    g.fillStyle = css("--muted"); g.textBaseline = "middle";
+    g.fillText("No readings in this range yet", L + w / 2, T + h / 2);
+    return;
+  }
+  // line
+  g.strokeStyle = css("--chart"); g.lineWidth = 2; g.lineJoin = "round"; g.beginPath();
+  readings.forEach((r, i) => { const px = x(r.ts), py = y(r.percent); i ? g.lineTo(px, py) : g.moveTo(px, py); });
+  g.stroke();
+  // last point
+  const last = readings[readings.length - 1];
+  g.fillStyle = css("--chart"); g.beginPath(); g.arc(x(last.ts), y(last.percent), 4, 0, 7); g.fill();
+}
+
+function setAsking(running) {
+  $("ask").disabled = running;
+  $("ask").innerHTML = running ? '<span class="spin"></span>Gemma is thinking…' : "Ask Gemma now";
+  if (running && !polling) polling = setInterval(loadLatest, 5000);
+  if (!running && polling) { clearInterval(polling); polling = null; }
+}
+
+$("ask").onclick = async () => {
+  setAsking(true);
+  await fetch("/api/analyze", { method: "POST" });
+};
+
+$("range").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  hours = +b.dataset.h;
+  document.querySelectorAll("#range button").forEach(x => x.classList.toggle("on", x === b));
+  loadReadings();
+};
+
+// ---- Chat ---------------------------------------------------------------
+const chatHistory = [];          // last few turns, sent back for follow-up questions
+let chatting = false;
+
+function addMsg(role, text) {
+  const el = document.createElement("div");
+  el.className = "msg " + role;
+  el.textContent = text;
+  $("msgs").appendChild(el);
+  $("msgs").scrollTop = $("msgs").scrollHeight;
+  return el;
+}
+
+function setChatting(on) {
+  chatting = on;
+  $("send").disabled = on; $("q").disabled = on;
+  document.querySelectorAll(".chip").forEach(c => c.disabled = on);
+}
+
+async function ask(question) {
+  question = question.trim();
+  if (!question || chatting) return;
+  setChatting(true);
+  addMsg("user", question);
+  const bubble = addMsg("assistant", "");
+  bubble.innerHTML = '<span class="wait"><span class="spin"></span>Gemma is reading the sensor data…</span>';
+  let answer = "";
+  const t0 = performance.now();
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, history: chatHistory.slice(-6) }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || "HTTP " + res.status);
+    }
+    const instant = res.headers.get("X-Answer-Source") === "instant";
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      answer += dec.decode(value, { stream: true });
+      bubble.textContent = answer;
+      $("msgs").scrollTop = $("msgs").scrollHeight;
+    }
+    if (!answer) bubble.textContent = "(no answer)";
+    const tag = document.createElement("span");
+    tag.className = "src";
+    const secs = (performance.now() - t0) / 1000;
+    tag.textContent = instant ? `⚡ instant (${secs.toFixed(2)} s) · straight from the sensor data`
+                              : `🤖 Gemma · answered in ${secs.toFixed(0)} s`;
+    bubble.appendChild(tag);
+    chatHistory.push({ role: "user", content: question }, { role: "assistant", content: answer });
+  } catch (e) {
+    bubble.classList.add("err");
+    bubble.textContent = e.message;
+  }
+  setChatting(false);
+  $("q").focus();
+}
+
+$("ask-form").onsubmit = e => { e.preventDefault(); const q = $("q").value; $("q").value = ""; ask(q); };
+$("chips").onclick = e => { const c = e.target.closest(".chip"); if (c) ask(c.textContent); };
+
+window.addEventListener("resize", draw);
+async function refresh() { try { await loadLatest(); await loadReadings(); } catch (e) { $("updated").textContent = "Can't reach the Pi"; } }
+refresh();
+setInterval(refresh, 60000);
+</script>
+</body>
+</html>

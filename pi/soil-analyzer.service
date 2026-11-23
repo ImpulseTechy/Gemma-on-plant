@@ -1,0 +1,11 @@
+[Unit]
+Description=Soil moisture AI analysis (stats + Gemma via Ollama)
+After=ollama.service
+Wants=ollama.service
+
+[Service]
+Type=oneshot
+User=shivansh
+WorkingDirectory=/home/shivansh/soil-monitor
+ExecStart=/usr/bin/python3 /home/shivansh/soil-monitor/analyzer.py
+TimeoutStartSec=600
